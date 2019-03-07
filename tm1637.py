@@ -1,30 +1,33 @@
-#!/usr/bin/env python3
+import gpiozero as gp
+import time
 
-import subprocess
-from time import time, sleep, localtime
+class TM1637(gp.CompositeDevice):
+    """
+    This compositive device represents a multiple-digit 7 segment
+    driven by a TM1637 chip. A data sheet can be found at [as of March 2019]:
+    https://www.mcielectronics.cl/website_MCI/static/documents/Datasheet_TM1637.pdf.
 
-from wiringpi2 import wiringPiSetupGpio, pinMode, digitalRead, digitalWrite, GPIO
-wiringPiSetupGpio()
+    A 7 segment digit consist of seven LED segements arranged and conventionally
+    labelled as follows:
 
-CLK = 21
-DIO = 20
+        A
+       ---
+    F |   | B
+       -G-
+    E |   | C
+       ---
+        D
 
-"""
-      A
-     ---
-  F |   | B
-     -G-
-  E |   | C
-     ---
-      D
-
-"""
-
-
-class TM1637:
+    The 8 bits of a byte send to TM1637 correspond to these segements as
+    follows (H correponds to any pots or colons integreted into the display)
+    
+    0bHGFEDCbA
+    
+    """
     I2C_COMM1 = 0x40
     I2C_COMM2 = 0xC0
     I2C_COMM3 = 0x80
+
     digit_to_segment = [
         0b0111111, # 0
         0b0000110, # 1
@@ -44,27 +47,72 @@ class TM1637:
         0b1110001  # F
         ]
 
-    def __init__(self, clk, dio):
-        self.clk = clk
-        self.dio = dio
-        self.brightness = 0x0f
+    def __init__(self, clk_gpio=21, dio_gpio=20):
+        """
+        Create a TM1637 device connected to two gpio gpins.
+        :param clk_gpio: gpio for the clock signal
+        :param dio_gpio: gpio for output and input if data
+        :param brightness: of the display from [0..0xF]
+        :param show: display is switched on if True, otherwise off.
+        """
+        gp.CompositeDevice.__init__(self,
+                                    clk=gp.Device(clk_gpio),
+                                    dio=gp.Devicedio(dio_gpio),
+                                    brightness=7,
+                                    show=True
+        )
 
-        pinMode(self.clk, GPIO.INPUT)
-        pinMode(self.dio, GPIO.INPUT)
-        digitalWrite(self.clk, GPIO.LOW)
-        digitalWrite(self.dio, GPIO.LOW)
+        if not 0 <= brightness < 8:
+            raise ValueError("Brightness must be between 0 and 7.")
+        self.brightness = brightness | (0b1000 if show else 0)
 
+        self.clk_tri()
+        self.dio_tri()
+
+        self.clk.pin.pull = "floating"
+        self.dio.pill = "floating"
+        
+        self.clk.pin.state = 0
+        self.dio.pin.state = 0
+
+    @staticmethod
     def bit_delay(self):
-        sleep(0.001)
-        return
+        """Wait 2us-- according to the datasheet we have to wait for
+        at least on 1us between certain changes on the clk and dio
+        lines. (This might seem extremely cautious as the underlying
+        OS (unless real time) plus instructiins exectuted on the way
+        from python interpreter to the systen call are likely to
+        consume in the order of a ms as well).
+        """
+        time.sleep(2./1000000)
+
+    def clk_low(self):
+        """switch clk pin to low"""
+        self.clk.pin.function="output"
+    def clk_high(self):
+        """switch clk pin to tristate (seen as a high level by the
+        TM1647 due to external pull-ups"""
+        self.clk.pin.function="input"
+    def dio_low(self):
+        """switch dio pin to low"""
+        self.dio.pin.function="output"
+    def dio_high(self):
+        """switch dio pin to tristate (seen as a high level by the
+        TM1647 due to external pull-ups"""
+        self.dio.pin.function="input"
    
     def set_segments(self, segments, pos=0):
-        # Write COMM1
+        """
+        Set the 7-segement displays to the data in segements starting from
+        :param segments: iterable with the bytes for the segments.
+        :param pos: display number 0..5 to start from
+        """
+        if not 0<=pos<6: raise ValueError("Position must be in range 0..5.")
+
         self.start()
         self.write_byte(self.I2C_COMM1)
         self.stop()
 
-        # Write COMM2 + first digit address
         self.start()
         self.write_byte(self.I2C_COMM2 + pos)
 
@@ -72,77 +120,60 @@ class TM1637:
             self.write_byte(seg)
         self.stop()
 
-        # Write COMM3 + brightness
         self.start()
         self.write_byte(self.I2C_COMM3 + self.brightness)
         self.stop()
 
     def start(self):
-        pinMode(self.dio, GPIO.OUTPUT)
+        """Header for a transmission. See data sheet."""
+        self.dio_low()
         self.bit_delay()
    
     def stop(self):
-        pinMode(self.dio, GPIO.OUTPUT)
+        """Trailer for a transmission. See data sheet."""
+        self.dio_low()
         self.bit_delay()
-        pinMode(self.clk, GPIO.INPUT)
+        self.clk_tri()
         self.bit_delay()
-        pinMode(self.dio, GPIO.INPUT)
+        self.dio_tri()
         self.bit_delay()
   
     def write_byte(self, b):
-      # 8 Data Bits
+        """Transmit a byte of 8 bits bitwise to the TM1637."""
         for i in range(8):
-
-            # CLK low
-            pinMode(self.clk, GPIO.OUTPUT)
+            self.clk_low()
             self.bit_delay()
 
-            pinMode(self.dio, GPIO.INPUT if b & 1 else GPIO.OUTPUT)
-
+            if b & 1:
+                self.dio_tri()
+            else:
+                self.dio_low()
             self.bit_delay()
 
-            pinMode(self.clk, GPIO.INPUT)
+            self.clk_tri()
             self.bit_delay()
             b >>= 1
       
-        pinMode(self.clk, GPIO.OUTPUT)
-        self.bit_delay()
-        pinMode(self.clk, GPIO.INPUT)
-        self.bit_delay()
-        pinMode(self.clk, GPIO.OUTPUT)
+        self.clk_low()
+        self.dio_tri()
         self.bit_delay()
 
-        return
+        self.clk_tri()
+        self.bit_delay()
 
-
-def show_ip_address(tm):
-    ipaddr = subprocess.check_output("hostname -I", shell=True, timeout=1).strip().split(b".")
-    for octet in ipaddr:
-        tm.set_segments([0, 0, 0, 0])
-        sleep(0.1)
-        tm.set_segments([tm.digit_to_segment[int(x) & 0xf] for x in octet])
-        sleep(0.9)
-
-
-def show_clock(tm):
-        t = localtime()
-        sleep(1 - time() % 1)
-        d0 = tm.digit_to_segment[t.tm_hour // 10] if t.tm_hour // 10 else 0
-        d1 = tm.digit_to_segment[t.tm_hour % 10]
-        d2 = tm.digit_to_segment[t.tm_min // 10]
-        d3 = tm.digit_to_segment[t.tm_min % 10]
-        tm.set_segments([d0, 0x80 + d1, d2, d3])
-        sleep(.5)
-        tm.set_segments([d0, d1, d2, d3])
-
+        # TODO: read in acknowledge bit
+        
+        self.clk_low()
+        self.bit_delay()
 
 if __name__ == "__main__":
     tm = TM1637(CLK, DIO)
 
-    show_ip_address(tm)
+    for i in xrange(10000):
+        d3 = i % 10
+        d2 = (i // 10)  % 10
+        d1 = (i // 100) % 10
+        d0 = (i // 1000) % 10
 
-    while True:
-        show_clock(tm)
-
-
-
+        tm.set_segements( [ tm.digit_to_segment([d]) for d in d0,d1,d2,d3])
+        time.sleep(0.1)
