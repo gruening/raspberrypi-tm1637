@@ -18,11 +18,9 @@ class TM1637(gp.CompositeDevice):
        ---
         D
 
-    The 8 bits of a byte send to TM1637 correspond to these segements as
-    follows (H correponds to any pots or colons integreted into the display)
-    
-    0bHGFEDCbA
-    
+    The 8 bits of a byte 0bHGFEDCbA send to TM1637 correspond to these
+    segements (H correponds to any dots or colons integreted into the
+    display) 
     """
     I2C_COMM1 = 0x40
     I2C_COMM2 = 0xC0
@@ -47,7 +45,12 @@ class TM1637(gp.CompositeDevice):
         0b1110001  # F
         ]
 
-    def __init__(self, clk_gpio=21, dio_gpio=20):
+    def __init__(self,
+                 clk_gpio=4,
+                 dio_gpio=18,
+                 brightness=3,
+                 show=True
+    ):
         """
         Create a TM1637 device connected to two gpio gpins.
         :param clk_gpio: gpio for the clock signal
@@ -56,51 +59,57 @@ class TM1637(gp.CompositeDevice):
         :param show: display is switched on if True, otherwise off.
         """
         gp.CompositeDevice.__init__(self,
-                                    clk=gp.Device(clk_gpio),
-                                    dio=gp.Devicedio(dio_gpio),
-                                    brightness=7,
-                                    show=True
+                                    clk=gp.GPIODevice(clk_gpio),
+                                    dio=gp.GPIODevice(dio_gpio)
         )
 
         if not 0 <= brightness < 8:
             raise ValueError("Brightness must be between 0 and 7.")
         self.brightness = brightness | (0b1000 if show else 0)
+        
+        self.clk.pin.output_with_state(0)
+        self.dio.pin.output_with_state(0) 
 
         self.clk_tri()
         self.dio_tri()
 
         self.clk.pin.pull = "floating"
-        self.dio.pill = "floating"
+        self.dio.pin.pull = "floating"
         
-        self.clk.pin.state = 0
-        self.dio.pin.state = 0
 
     @staticmethod
-    def bit_delay(self):
-        """Wait 2us-- according to the datasheet we have to wait for
+    def bit_delay():
+        """Wait 1us. According to the TM1637 datasheet we have to wait for
         at least on 1us between certain changes on the clk and dio
-        lines. (This might seem extremely cautious as the underlying
-        OS (unless real time) plus instructiins exectuted on the way
-        from python interpreter to the systen call are likely to
-        consume in the order of a ms as well).
+        lines. 
+
+        Typically the delay time of method will be much longer than
+        1us, up to in the order for ms or even 10s of ms depending on
+        the underlying OS etc.  
+
+        (In fact on a RPi Zero even elimanting with method all
+        togethe leaves the TM1637 working, persumably because executing
+        all the code between the python interpreter and the system
+        call to set the gpio takes in the order of us.)
         """
-        time.sleep(2./1000000)
+        time.sleep(1./1000000)
 
     def clk_low(self):
         """switch clk pin to low"""
         self.clk.pin.function="output"
-    def clk_high(self):
+        #self.clk.pin.output_with_state(0)
+    def clk_tri(self):
         """switch clk pin to tristate (seen as a high level by the
         TM1647 due to external pull-ups"""
         self.clk.pin.function="input"
     def dio_low(self):
         """switch dio pin to low"""
         self.dio.pin.function="output"
-    def dio_high(self):
+    def dio_tri(self):
         """switch dio pin to tristate (seen as a high level by the
         TM1647 due to external pull-ups"""
         self.dio.pin.function="input"
-   
+        
     def set_segments(self, segments, pos=0):
         """
         Set the 7-segement displays to the data in segements starting from
@@ -167,13 +176,14 @@ class TM1637(gp.CompositeDevice):
         self.bit_delay()
 
 if __name__ == "__main__":
-    tm = TM1637(CLK, DIO)
+    tm = TM1637()
 
-    for i in xrange(10000):
-        d3 = i % 10
-        d2 = (i // 10)  % 10
-        d1 = (i // 100) % 10
-        d0 = (i // 1000) % 10
+    for i in xrange(0x10000):
+        d3 = i % 16
+        d2 = (i // 16)  % 16
+        d1 = (i // 16**2) % 16
+        d0 = (i // 16**3) % 16
 
-        tm.set_segements( [ tm.digit_to_segment([d]) for d in d0,d1,d2,d3])
-        time.sleep(0.1)
+        tm.set_segments( [ tm.digit_to_segment[d] for d in d0,d1,d2,d3])
+
+
