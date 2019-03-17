@@ -47,8 +47,8 @@ class TM1637(gp.CompositeDevice):
 
     def __init__(self,
                  clk_gpio=4,
-                 dio_gpio=18,
-                 brightness=3,
+                 dio_gpio=17,
+                 brightness=0,
                  show=True
     ):
         """
