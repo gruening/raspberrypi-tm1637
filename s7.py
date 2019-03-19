@@ -1,6 +1,10 @@
 import tm1637
 import io
 
+import logging as log
+log.basicConfig(level=log.DEBUG)
+
+
 class S7:
     """
     Define high level operations for seven segement displays.
@@ -9,7 +13,7 @@ class S7:
         """create mapping from characters to segments
         :param: enumeration of segment bit masks.
         """
-        self.s7 = {
+        s7 = {
             ' ': 0b0000000,
             # characters with one segment:
             '-': SEG.G,
@@ -20,7 +24,7 @@ class S7:
             'R': SEG.E | SEG.G
         }
         # characters with three segments:
-        self.s7.update({
+        s7.update({
             "J": s7["1"] | SEG.D,
             "L": s7["I"] | SEG.D,
             "N": s7["R"] | SEG.C,
@@ -31,7 +35,7 @@ class S7:
             "K": s7["I"] | SEG.G
         })
         # characters with four segments:
-        self.s7.update({
+        s7.update({
             "M": s7["N"] | SEG.A,
             "C": s7["L"] | SEG.A,
             "W": SEG.D | SEG.F | SEG.G | SEG.B,
@@ -39,28 +43,28 @@ class S7:
             "DEGREE":  SEG.A | SEG.B | SEG.G | SEG.F,
             "T": s7["L"] | SEG.G,
             "4": s7["1"] | SEG.G | SEG.F,
+            "F": s7["GAMMA"] | SEG.G,
             "O": s7["N"] | SEG.D
         })
         # characters with five segments:
-        self.s7.update({
+        s7.update({
             "U": s7["V"] | SEG.B | SEG.F,
             "B": s7["O"] | SEG.F,         
             "D": s7["O"] | SEG.B,
             "P": s7["F"] | SEG.B,
             "2": s7["?"] | SEG.D,
-            "F": s7["GAMMA"] | SEG.G,
             "G": s7["C"] | SEG.C,
             "H": s7["1"] | s7["I"] | SEG.G,
             "Q": s7["DEGREE"] | SEG.C,
             "Y": s7["1"] | SEG.F | SEG.G,
             "3": s7["J"] | SEG.G | SEG.A,
-            "@": s7_C | SEG.B,
+            "@": s7["C"] | SEG.B,
             "5": SEG.A | SEG.F | SEG.G | SEG.C | SEG.D,
             "E": s7["C"] | SEG.G,
             "9": s7["DEGREE"] | SEG.C | SEG.D,
-            "0": s7["C"] | S7["1"]            
+            "0": s7["C"] | s7["1"]            
         })
-        self.s7.update({
+        s7.update({
             "Z": s7["2"],
             "S": s7["5"],
             # characters with six segments:
@@ -69,38 +73,36 @@ class S7:
             # characters with seven segments:
             "8": s7["0"] | SEG.G
         })
+        self.s7 = s7
 
-        def __init__(self,tm):
-            self.tm = tm
-            self.chars_from_segments(tm.SEG)
+    def __init__(self,tm):
+        self.tm = tm
+        self.chars_from_segments(tm.SEG)
 
-        def open(self):
-            return Stream(self)
+    def open(self):
+        return self.Stream(self)
 
-        class Stream(io.IOBase):
-            def __init__(self,s7):
-                self.s7 = s7
-                self._blank()
+    class Stream(io.IOBase):
+        def __init__(self,s7):
+            self.s7 = s7
+            self._blank()
 
-            def _blank(self):
-                self.s7.tm.set_segments( (0,0,0,0) )
-                self.do_blank = False
-                self.pos = 0
+        def _blank(self):
+            self.s7.tm.set_segments( (0,0,0,0) ,pos=0)
+            self.do_blank = False
+            self.pos = 0
 
-            def write(self,str):
-                if self.do_blank: self.blank()
+        def write(self,str):
+            if self.do_blank: self._blank()
                 
-                for written, ch in enumerate(str):
-                    if ch == "\n":
-                        self.do_blank = True
-                    elif ch == "\r":
-                        self.pos = 0
-                    elif ch in self.s7:
-                        self.tm.set_segments(self.s7[ch], pos=self.pos)
-                        pos+=1
-                    else:
-                        log.debug("{}: Non-displayable character: {}.".format(repr(self),ch))
-                return written
+            for written, ch in enumerate(str):
+                if ch == "\n": self.do_blank = True
+                elif ch == "\r": self.pos = 0
+                elif ch in self.s7.s7:
+                    self.s7.tm.set_segments( [self.s7.s7[ch]], pos=self.pos)
+                    self.pos+=1
+                else: log.debug("{}: Non-displayable character: {}.".format(repr(self),ch))
+            return written
 
 
 if __name__ =="__main__":
@@ -110,17 +112,21 @@ if __name__ =="__main__":
 
     s = s7.open()
 
-    for str in ("ABCD\n",
-                "EFGH\n", 
-                "IJKL\n", 
-                "MNOP\n",
-                "QRTS\n",
-                "UVWX\n",
-                "YZ01\n",
-                "2345\n",
-                "6789\n",
-                "@_?+\n"):
-        s7.write(str)
+    import time
+
+    for str in ("ABCD",
+                "EFGH", 
+                "IJKL", 
+                "MNOP",
+                "QRTS",
+                "UVWX",
+                "YZ01",
+                "2345",
+                "6789",
+                "@_?+"):
+        print >>s, str
+        #s.write(str)
+        time.sleep(2)
 
     
     

@@ -8,7 +8,7 @@ class TM1637(gp.CompositeDevice):
     driven by a TM1637 chip. A data sheet can be found at [as of March 2019]:
     https://www.mcielectronics.cl/website_MCI/static/documents/Datasheet_TM1637.pdf.
     """
-    class SEG(Enum):
+    class SEG():
         """A 7 segment digit consist of seven LED segements arranged
         and conventionally labelled as follows:
 
@@ -98,7 +98,7 @@ class TM1637(gp.CompositeDevice):
         TM1647 due to external pull-ups"""
         self.dio.pin.function="input"
         
-    def set_segments(self, pos=0, *segments):
+    def set_segments(self, segments,pos=0):
         """
         Set the 7-segement displays to the data in segements starting from
         :param segments: iterable with the bytes for the segments.
