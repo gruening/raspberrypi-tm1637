@@ -97,7 +97,19 @@ class TM1637(gp.CompositeDevice):
         """switch dio pin to tristate (seen as a high level by the
         TM1647 due to external pull-ups"""
         self.dio.pin.function="input"
+
         
+    def mode_command(self):
+        self.start()
+        self.write_byte(self.I2C_COMM1)
+        self.stop()
+
+    def display_command(self):
+   
+        self.start()
+        self.write_byte(self.I2C_COMM3 + self.brightness)
+        self.stop()
+
     def set_segments(self, segments,pos=0):
         """
         Set the 7-segement displays to the data in segements starting from
@@ -106,10 +118,8 @@ class TM1637(gp.CompositeDevice):
         """
         if not 0<=pos<6: raise ValueError("Position must be in range 0..5.")
 
-        self.start()
-        self.write_byte(self.I2C_COMM1)
-        self.stop()
-
+        self.mode_command()
+        
         self.start()
         self.write_byte(self.I2C_COMM2 + pos)
 
@@ -117,9 +127,8 @@ class TM1637(gp.CompositeDevice):
             self.write_byte(seg)
         self.stop()
 
-        self.start()
-        self.write_byte(self.I2C_COMM3 + self.brightness)
-        self.stop()
+        self.display_command()
+
 
     def start(self):
         """Header for a transmission. See data sheet."""
