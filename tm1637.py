@@ -55,9 +55,7 @@ class TM1637(gp.CompositeDevice):
                                     dio=gp.GPIODevice(dio_gpio)
         )
 
-        if not 0 <= brightness < 8:
-            raise ValueError("Brightness must be between 0 and 7.")
-        self.brightness = brightness | (0b1000 if show else 0)
+
         
         self.clk.pin.output_with_state(0)
         self.dio.pin.output_with_state(0) 
@@ -65,7 +63,10 @@ class TM1637(gp.CompositeDevice):
         self.dio_tri()
         self.clk.pin.pull = "floating"
         self.dio.pin.pull = "floating"
-        
+
+        self.mode_command()
+        self.display_command(brightness, show)
+
     @staticmethod
     def bit_delay():
         """Wait 1us. According to the TM1637 datasheet we have to wait for
@@ -73,7 +74,7 @@ class TM1637(gp.CompositeDevice):
         lines. 
 
         Typically the delay time of method will be much longer than
-        1us, up to in the order for ms or even 10s of ms depending on
+        1us, up to in the order for ms or even tens of ms depending on
         the underlying OS etc.  
 
         (In fact on a RPi Zero even elimanting with method all
@@ -98,16 +99,19 @@ class TM1637(gp.CompositeDevice):
         TM1647 due to external pull-ups"""
         self.dio.pin.function="input"
 
-        
     def mode_command(self):
         self.start()
         self.write_byte(self.I2C_COMM1)
         self.stop()
 
-    def display_command(self):
-   
+    def display_command(self, brightness=1, show=True):
+
+        if not 0 <= brightness < 8:
+            raise ValueError("Brightness must be between 0 and 7.")
+        self.brightness = brightness | (0b1000 if show else 0)
+
         self.start()
-        self.write_byte(self.I2C_COMM3 + self.brightness)
+        self.write_byte(self.I2C_COMM3 + brightness)
         self.stop()
 
     def set_segments(self, segments,pos=0):
@@ -116,10 +120,11 @@ class TM1637(gp.CompositeDevice):
         :param segments: iterable with the bytes for the segments.
         :param pos: display number 0..5 to start from
         """
+
+        # self.mode_command()
+        
         if not 0<=pos<6: raise ValueError("Position must be in range 0..5.")
 
-        self.mode_command()
-        
         self.start()
         self.write_byte(self.I2C_COMM2 + pos)
 
@@ -127,8 +132,7 @@ class TM1637(gp.CompositeDevice):
             self.write_byte(seg)
         self.stop()
 
-        self.display_command()
-
+        # self.display_command()
 
     def start(self):
         """Header for a transmission. See data sheet."""
