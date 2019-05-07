@@ -63,6 +63,7 @@ class TM1637(gp.CompositeDevice):
         self.dio_tri()
         self.clk.pin.pull = "floating"
         self.dio.pin.pull = "floating"
+        self.bit_delay()
 
         self.mode_command()
         self.display_command(brightness, show)
@@ -108,7 +109,7 @@ class TM1637(gp.CompositeDevice):
 
         if not 0 <= brightness < 8:
             raise ValueError("Brightness must be between 0 and 7.")
-        self.brightness = brightness | (0b1000 if show else 0)
+        brightness = brightness | (0b1000 if show else 0)
 
         self.start()
         self.write_byte(self.I2C_COMM3 + brightness)
