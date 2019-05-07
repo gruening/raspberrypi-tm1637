@@ -66,6 +66,7 @@ class TM1637(gp.CompositeDevice):
         self.bit_delay()
 
         self.mode_command()
+        self.set_segments( [0] * 6 )
         self.display_command(brightness, show)
 
     @staticmethod
@@ -109,10 +110,9 @@ class TM1637(gp.CompositeDevice):
 
         if not 0 <= brightness < 8:
             raise ValueError("Brightness must be between 0 and 7.")
-        brightness = brightness | (0b1000 if show else 0)
 
         self.start()
-        self.write_byte(self.I2C_COMM3 + brightness)
+        self.write_byte(self.I2C_COMM3 | brightness | (0b1000 if show else 0))
         self.stop()
 
     def set_segments(self, segments,pos=0):
@@ -121,19 +121,14 @@ class TM1637(gp.CompositeDevice):
         :param segments: iterable with the bytes for the segments.
         :param pos: display number 0..5 to start from
         """
-
-        # self.mode_command()
-        
         if not 0<=pos<6: raise ValueError("Position must be in range 0..5.")
 
         self.start()
-        self.write_byte(self.I2C_COMM2 + pos)
+        self.write_byte(self.I2C_COMM2 | pos)
 
         for seg in segments:
             self.write_byte(seg)
         self.stop()
-
-        # self.display_command()
 
     def start(self):
         """Header for a transmission. See data sheet."""
@@ -177,11 +172,3 @@ class TM1637(gp.CompositeDevice):
 
 if __name__ == "__main__":
     tm = TM1637()
-
-    for i in xrange(0x10000):
-        d3 = i % 16
-        d2 = (i // 16)  % 16
-        d1 = (i // 16**2) % 16
-        d0 = (i // 16**3) % 16
-
-        tm.set_segments( [ tm.segments[d] for d in d0,d1,d2,d3])
