@@ -173,6 +173,6 @@ class TM1637(gp.CompositeDevice):
         
         #self.clk_low() # Why? -- this is done first thing for the next word.
         #self.bit_delay() # Why?
-o
+
 if __name__ == "__main__":
     tm = TM1637()
