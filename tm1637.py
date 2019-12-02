@@ -104,7 +104,7 @@ class TM1637(gp.CompositeDevice):
         :param segments: iterable with the bytes for the segments.
         :param pos: display number 0..5 to start from
         """
-        if not 0<=pos<6: raise ValueError("Position must be in range 0..5.")
+        if not 0<=pos<6: raise ValueError("Position must be in range 0..5: {}.".format(pos))
 
         self.start()
         self.write_byte(self.I2C_COMM1)

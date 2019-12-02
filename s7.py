@@ -94,11 +94,11 @@ class S7:
 
         def write(self,str):
             if self.do_blank: self._blank()
-                
-            for written, ch in enumerate(str):
+            for written, ch in enumerate(str.upper()):
                 if ch == "\n": self.do_blank = True
                 elif ch == "\r": self.pos = 0
                 elif ch in self.s7.s7:
+                    if self.pos > 5: return written
                     self.s7.tm.set_segments( [self.s7.s7[ch]], pos=self.pos)
                     self.pos+=1
                 else: log.debug("{}: Non-displayable character: {}.".format(repr(self),ch))
